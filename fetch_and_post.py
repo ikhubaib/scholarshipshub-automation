@@ -2,26 +2,23 @@
 import os
 import requests
 from bs4 import BeautifulSoup
-import openai
+from gensim.summarization import summarize as gensim_summarize
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 
 # ─── CONFIGURATION ────────────────────────────────────────────────────────────
 
-# Your Blogger numeric ID
+# Your Blogger numeric ID (replace with your own)
 BLOG_ID = "4110173004926574485"
 
-# Scholarship listing sources: (page URL, CSS selector for each entry)
+# Scholarship listing sources: list of (page URL, CSS selector for each entry)
 SOURCES = [
     (
         "https://scholarship-positions.com/fully-funded-scholarships/",
         "#site-main article"
     ),
 ]
-
-# OpenAI model for summaries
-OPENAI_MODEL = "gpt-3.5-turbo"
 
 # ─── AUTHENTICATE TO BLOGGER ────────────────────────────────────────────────────
 
@@ -49,13 +46,13 @@ def fetch_scholarships():
             # Title & link
             title_el = item.select_one(".entry-title a")
             title    = title_el.get_text(strip=True) if title_el else "No title"
-            link     = title_el["href"]          if title_el else ""
+            link     = title_el["href"] if title_el else ""
 
             # Deadline
             deadline_el = item.select_one(".entry-meta time")
             deadline    = deadline_el.get_text(strip=True) if deadline_el else ""
 
-            # Country (not provided on this page)
+            # Country (not on this page)
             country     = ""
 
             out.append({
@@ -66,27 +63,27 @@ def fetch_scholarships():
             })
     return out
 
-# ─── GENERATE ACADEMIC SUMMARY ─────────────────────────────────────────────────
+# ─── EXTRACTIVE SUMMARY WITH GENSIM ─────────────────────────────────────────────
 
 def summarize_entry(entry: dict) -> str:
-    openai.api_key = os.environ["OPENAI_API_KEY"]
-    prompt = (
-        f"Write a concise 2–3 sentence summary for this scholarship opportunity:\n\n"
-        f"Title: {entry['title']}\n"
-        f"Country: {entry['country']}\n"
-        f"Deadline: {entry['deadline']}\n"
-        f"Link: {entry['link']}\n"
-    )
-    resp = openai.ChatCompletion.create(
-        model=OPENAI_MODEL,
-        messages=[
-            {"role": "system", "content": "You are an expert educational advisor."},
-            {"role": "user",   "content": prompt}
-        ],
-        max_tokens=100,
-        temperature=0.7
-    )
-    return resp.choices[0].message.content.strip()
+    """
+    Fetches the full page text and runs an extractive summary.
+    """
+    try:
+        resp = requests.get(entry["link"], timeout=10)
+        soup = BeautifulSoup(resp.text, "html.parser")
+        content_el = soup.select_one(".entry-content") or soup.select_one("article")
+        full_text  = content_el.get_text(separator=" ", strip=True)
+    except Exception:
+        full_text = f"{entry['title']} — {entry['link']}"
+
+    try:
+        summary = gensim_summarize(full_text, word_count=50)
+        if not summary:
+            raise ValueError
+    except Exception:
+        summary = full_text[:200].rsplit(" ", 1)[0] + "…"
+    return summary
 
 # ─── PUBLISH TO BLOGGER ────────────────────────────────────────────────────────
 
