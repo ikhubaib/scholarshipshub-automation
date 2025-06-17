@@ -9,17 +9,18 @@ from googleapiclient.discovery import build
 
 # ─── CONFIGURATION ────────────────────────────────────────────────────────────
 
-# 1) Replace with your numeric Blog ID (from the URL in your dashboard)
-BLOG_ID = 4110173004926574485
+# Your Blogger numeric ID
+BLOG_ID = "4110173004926574485"
 
-# 2) Add your scholarship sources here.
-#    Each entry is (page_url, css_selector_for_each_item)
-#    You can also use RSS URLs if you prefer.
+# Scholarship listing sources: (page URL, CSS selector for each entry)
 SOURCES = [
-    # ("https://example.com/scholarships", ".listing-item"),
+    (
+        "https://scholarship-positions.com/fully-funded-scholarships/",
+        "#site-main article"
+    ),
 ]
 
-# 3) Which OpenAI model to use for summaries
+# OpenAI model for summaries
 OPENAI_MODEL = "gpt-3.5-turbo"
 
 # ─── AUTHENTICATE TO BLOGGER ────────────────────────────────────────────────────
@@ -45,21 +46,23 @@ def fetch_scholarships():
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
         for item in soup.select(selector):
-            title_el = item.select_one(".title")
-            link_el  = item.select_one("a")
-            country_el  = item.select_one(".country")
-            deadline_el = item.select_one(".deadline")
-
+            # Title & link
+            title_el = item.select_one(".entry-title a")
             title    = title_el.get_text(strip=True) if title_el else "No title"
-            link     = link_el["href"]         if link_el  else ""
-            country  = country_el.get_text(strip=True) if country_el  else ""
-            deadline = deadline_el.get_text(strip=True) if deadline_el else ""
+            link     = title_el["href"]          if title_el else ""
+
+            # Deadline
+            deadline_el = item.select_one(".entry-meta time")
+            deadline    = deadline_el.get_text(strip=True) if deadline_el else ""
+
+            # Country (not provided on this page)
+            country     = ""
 
             out.append({
                 "title": title,
                 "link": link,
-                "country": country,
-                "deadline": deadline
+                "deadline": deadline,
+                "country": country
             })
     return out
 
@@ -105,10 +108,12 @@ def post_to_blogger(service, entry: dict):
 # ─── MAIN ──────────────────────────────────────────────────────────────────────
 
 def main():
-    if BLOG_ID == "YOUR_BLOG_ID":
-        raise SystemExit("❌ Please edit fetch_and_post.py and set your BLOG_ID.")
     service = authenticate_blogger()
-    for entry in fetch_scholarships():
+    entries = fetch_scholarships()
+    if not entries:
+        print("No scholarships found; nothing to post.")
+        return
+    for entry in entries:
         post_to_blogger(service, entry)
 
 if __name__ == "__main__":
