@@ -8,7 +8,7 @@ from googleapiclient.discovery import build
 
 # ─── CONFIGURATION ────────────────────────────────────────────────────────────
 
-BLOG_ID = "4110173004926574485"  # your blog ID
+BLOG_ID = "4110173004926574485"
 
 SOURCES = [
     (
@@ -40,23 +40,34 @@ def fetch_scholarships():
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
         for item in soup.select(selector):
-            title_el = item.select_one(".entry-title a")
-            title    = title_el.get_text(strip=True) if title_el else "No title"
-            link     = title_el["href"] if title_el else ""
-            deadline_el = item.select_one(".entry-meta time")
-            deadline    = deadline_el.get_text(strip=True) if deadline_el else ""
+            # 1) Try to get title & link from <a> inside .entry-title
+            a = item.select_one(".entry-title a")
+            if a:
+                title = a.get_text(strip=True)
+                link  = a["href"]
+            else:
+                # 2) Fallback: text of .entry-title
+                h = item.select_one(".entry-title")
+                title = h.get_text(strip=True) if h else "No title"
+                # and first <a> in article for the link
+                any_a = item.find("a", href=True)
+                link  = any_a["href"] if any_a else ""
+
+            # Deadline
+            d = item.select_one(".entry-meta time")
+            deadline = d.get_text(strip=True) if d else ""
+
             out.append({
-                "title": title,
-                "link": link,
+                "title":    title,
+                "link":     link,
                 "deadline": deadline,
-                "country": ""
+                "country":  ""  # not on this listing page
             })
     return out
 
 # ─── SIMPLE EXTRACTIVE SUMMARY ──────────────────────────────────────────────────
 
 def summarize_entry(entry: dict) -> str:
-    # Try to fetch the full page text
     try:
         resp = requests.get(entry["link"], timeout=10)
         soup = BeautifulSoup(resp.text, "html.parser")
@@ -65,8 +76,8 @@ def summarize_entry(entry: dict) -> str:
     except Exception:
         full_text = f"{entry['title']} — {entry['link']}"
 
-    # Split into sentences and take the first two
-    sentences = [s.strip() for s in full_text.replace("\n", " ").split(". ") if s]
+    # take first two sentences
+    sentences = [s.strip() for s in full_text.replace("\n"," ").split(". ") if s]
     summary = ". ".join(sentences[:2])
     if not summary.endswith("."):
         summary += "."
