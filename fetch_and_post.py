@@ -10,7 +10,7 @@ from googleapiclient.discovery import build
 # ─── CONFIGURATION ────────────────────────────────────────────────────────────
 
 # 1) Replace with your numeric Blog ID (from the URL in your dashboard)
-BLOG_ID = "YOUR_BLOG_ID"
+BLOG_ID = 4110173004926574485
 
 # 2) Add your scholarship sources here.
 #    Each entry is (page_url, css_selector_for_each_item)
