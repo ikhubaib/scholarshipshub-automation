@@ -2,17 +2,14 @@
 import os
 import requests
 from bs4 import BeautifulSoup
-from gensim.summarization import summarize as gensim_summarize
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 
 # ─── CONFIGURATION ────────────────────────────────────────────────────────────
 
-# Your Blogger numeric ID (replace with your own)
-BLOG_ID = "4110173004926574485"
+BLOG_ID = "4110173004926574485"  # your blog ID
 
-# Scholarship listing sources: list of (page URL, CSS selector for each entry)
 SOURCES = [
     (
         "https://scholarship-positions.com/fully-funded-scholarships/",
@@ -43,32 +40,23 @@ def fetch_scholarships():
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
         for item in soup.select(selector):
-            # Title & link
             title_el = item.select_one(".entry-title a")
             title    = title_el.get_text(strip=True) if title_el else "No title"
             link     = title_el["href"] if title_el else ""
-
-            # Deadline
             deadline_el = item.select_one(".entry-meta time")
             deadline    = deadline_el.get_text(strip=True) if deadline_el else ""
-
-            # Country (not on this page)
-            country     = ""
-
             out.append({
                 "title": title,
                 "link": link,
                 "deadline": deadline,
-                "country": country
+                "country": ""
             })
     return out
 
-# ─── EXTRACTIVE SUMMARY WITH GENSIM ─────────────────────────────────────────────
+# ─── SIMPLE EXTRACTIVE SUMMARY ──────────────────────────────────────────────────
 
 def summarize_entry(entry: dict) -> str:
-    """
-    Fetches the full page text and runs an extractive summary.
-    """
+    # Try to fetch the full page text
     try:
         resp = requests.get(entry["link"], timeout=10)
         soup = BeautifulSoup(resp.text, "html.parser")
@@ -77,12 +65,11 @@ def summarize_entry(entry: dict) -> str:
     except Exception:
         full_text = f"{entry['title']} — {entry['link']}"
 
-    try:
-        summary = gensim_summarize(full_text, word_count=50)
-        if not summary:
-            raise ValueError
-    except Exception:
-        summary = full_text[:200].rsplit(" ", 1)[0] + "…"
+    # Split into sentences and take the first two
+    sentences = [s.strip() for s in full_text.replace("\n", " ").split(". ") if s]
+    summary = ". ".join(sentences[:2])
+    if not summary.endswith("."):
+        summary += "."
     return summary
 
 # ─── PUBLISH TO BLOGGER ────────────────────────────────────────────────────────
@@ -90,7 +77,7 @@ def summarize_entry(entry: dict) -> str:
 def post_to_blogger(service, entry: dict):
     summary = summarize_entry(entry)
     content = (
-        f"<p>{summary}</p>"
+        f"<p>{summary}</p>\n"
         f"<p><a href=\"{entry['link']}\">Apply Here</a></p>"
     )
     body = {
