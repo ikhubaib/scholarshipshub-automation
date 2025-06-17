@@ -2,14 +2,12 @@ name: Auto-Publish Scholarships
 
 on:
   schedule:
-    # Daily at 03:00 PKT → 22:00 UTC
-    - cron: '0 22 * * *'
+    - cron: '0 22 * * *'   # Daily at 03:00 PKT
   workflow_dispatch:
 
 jobs:
   publish:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v3
 
@@ -20,11 +18,11 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install requests beautifulsoup4 gensim==3.8.3 Pillow google-api-python-client python-slugify
+          pip install requests beautifulsoup4 google-api-python-client python-slugify
+
       - name: Run fetch-and-post
         env:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: python fetch_and_post.py
